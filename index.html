@@ -359,11 +359,152 @@
     width: 0%;
   }
 
+  /* Add guest button */
+  .add-guest-btn {
+    width: 100%;
+    padding: 0.85rem;
+    border: 1.5px dashed var(--border-subtle);
+    border-radius: 14px;
+    background: transparent;
+    color: var(--text-dim);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+
+  .add-guest-btn:hover {
+    border-color: var(--accent-dim);
+    color: var(--accent);
+  }
+
+  .add-guest-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  /* Modal overlay */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 200;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s;
+  }
+
+  .modal-overlay.open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .modal {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 18px 18px 0 0;
+    padding: 1.5rem 1.25rem 2rem;
+    width: 100%;
+    max-width: 480px;
+    transform: translateY(100%);
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .modal-overlay.open .modal {
+    transform: translateY(0);
+  }
+
+  .modal-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.2rem;
+    margin-bottom: 1rem;
+    color: var(--text);
+  }
+
+  .modal-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .modal-input {
+    width: 100%;
+    padding: 0.7rem 0.85rem;
+    background: var(--bg-deep);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .modal-input::placeholder { color: var(--text-dim); }
+  .modal-input:focus { border-color: var(--accent-dim); }
+
+  .modal-actions {
+    display: flex;
+    gap: 0.65rem;
+  }
+
+  .modal-actions button {
+    flex: 1;
+    padding: 0.7rem;
+    border-radius: 10px;
+    border: none;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+
+  .btn-cancel {
+    background: var(--border-subtle);
+    color: var(--text-dim);
+  }
+
+  .btn-add {
+    background: var(--accent);
+    color: var(--bg-deep);
+  }
+
+  .btn-add:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  /* Guest badge */
+  .guest-badge {
+    font-size: 0.6rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--accent);
+    background: rgba(212,165,116,0.12);
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    align-self: center;
+  }
+
   /* Tablet+ */
   @media (min-width: 640px) {
     .header { padding: 1.5rem 2rem 2rem; }
     .card-list { padding: 0 2rem 6rem; }
     .title { font-size: 1.75rem; }
+    .modal { border-radius: 18px; margin-bottom: 2rem; }
   }
 
   @media (min-width: 800px) {
@@ -372,7 +513,7 @@
       grid-template-columns: 1fr 1fr;
       gap: 0.65rem;
     }
-    .empty-state { grid-column: 1 / -1; }
+    .empty-state, .add-guest-btn { grid-column: 1 / -1; }
   }
 </style>
 </head>
@@ -395,6 +536,21 @@
 
 <div class="card-list" id="cardList"></div>
 <div class="empty-state" id="emptyState">No one matched your search.</div>
+
+<!-- Add guest modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <div class="modal-title">Add unexpected guest</div>
+    <div class="modal-fields">
+      <input type="text" class="modal-input" id="guestFirst" placeholder="First name" autocomplete="off" />
+      <input type="text" class="modal-input" id="guestLast" placeholder="Last name" autocomplete="off" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="modalCancel">Cancel</button>
+      <button class="btn-add" id="modalAdd" disabled>Add guest</button>
+    </div>
+  </div>
+</div>
 
 <script>
 const ATTENDEES = [
@@ -431,12 +587,14 @@ const STORAGE_KEY = "rustdinner_arrived";
 // ── Firebase config ──
 // Replace with your Firebase Realtime Database URL (create one at https://console.firebase.google.com)
 const FB_DB = "https://rust-dinner-default-rtdb.firebaseio.com";
-const FB_PATH = "/arrived";
-const FB_URL = `${FB_DB}${FB_PATH}`;
+const FB_ARRIVED_URL = `${FB_DB}/arrived`;
+const FB_GUESTS_URL = `${FB_DB}/guests`;
 
 // --- State ---
 let arrived = new Set();
+let extraGuests = []; // guests added at runtime, synced via Firebase
 let firebaseOk = false;
+let nextGuestId = 100;
 
 // Load from localStorage as immediate fallback
 function loadLocal() {
@@ -451,9 +609,9 @@ function saveLocal() {
 }
 
 // --- Firebase REST API ---
-async function fbPut(data) {
+async function fbPutArrived(data) {
   try {
-    await fetch(`${FB_URL}.json`, {
+    await fetch(`${FB_ARRIVED_URL}.json`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
@@ -462,46 +620,91 @@ async function fbPut(data) {
   } catch { firebaseOk = false; }
 }
 
+async function fbPutGuests(data) {
+  try {
+    await fetch(`${FB_GUESTS_URL}.json`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    firebaseOk = true;
+  } catch { firebaseOk = false; }
+}
+
+function parseArrivedData(data) {
+  if (data === null) return new Set();
+  if (Array.isArray(data)) return new Set(data);
+  if (typeof data === "object") return new Set(Object.values(data));
+  return new Set();
+}
+
+function parseGuestsData(data) {
+  if (!data || typeof data !== "object") return [];
+  return Object.values(data);
+}
+
 function fbListen() {
   try {
-    const evtSource = new EventSource(`${FB_URL}.json`);
+    // Listen to the root so we get both arrived and guests updates
+    const evtSource = new EventSource(`${FB_DB}/.json`);
     evtSource.addEventListener("put", (e) => {
       try {
         const payload = JSON.parse(e.data);
+        const path = payload.path;
         const data = payload.data;
-        if (data === null) {
-          arrived = new Set();
-        } else if (Array.isArray(data)) {
-          arrived = new Set(data);
-        } else if (typeof data === "object") {
-          // Firebase may return {0: id0, 1: id1, ...}
-          arrived = new Set(Object.values(data));
+        if (path === "/") {
+          // Full data
+          arrived = parseArrivedData(data?.arrived);
+          const newGuests = parseGuestsData(data?.guests);
+          if (JSON.stringify(newGuests) !== JSON.stringify(extraGuests)) {
+            extraGuests = newGuests;
+            rerender();
+          }
+          saveLocal();
+          updateUI();
+        } else if (path === "/arrived") {
+          arrived = parseArrivedData(data);
+          saveLocal();
+          updateUI();
+        } else if (path.startsWith("/guests")) {
+          fbFetchGuests();
         }
         firebaseOk = true;
-        saveLocal();
-        updateUI();
       } catch {}
     });
-    evtSource.addEventListener("patch", (e) => {
-      // Re-fetch on patch for simplicity
-      fbFetch();
+    evtSource.addEventListener("patch", () => {
+      fbFetchAll();
     });
     evtSource.onerror = () => { firebaseOk = false; };
   } catch { firebaseOk = false; }
 }
 
-async function fbFetch() {
+async function fbFetchAll() {
   try {
-    const res = await fetch(`${FB_URL}.json`);
+    const res = await fetch(`${FB_DB}/.json`);
     const data = await res.json();
-    if (Array.isArray(data)) {
-      arrived = new Set(data);
-    } else if (data && typeof data === "object") {
-      arrived = new Set(Object.values(data));
+    arrived = parseArrivedData(data?.arrived);
+    const newGuests = parseGuestsData(data?.guests);
+    if (JSON.stringify(newGuests) !== JSON.stringify(extraGuests)) {
+      extraGuests = newGuests;
+      rerender();
     }
     firebaseOk = true;
     saveLocal();
     updateUI();
+  } catch { firebaseOk = false; }
+}
+
+async function fbFetchGuests() {
+  try {
+    const res = await fetch(`${FB_GUESTS_URL}.json`);
+    const data = await res.json();
+    const newGuests = parseGuestsData(data);
+    if (JSON.stringify(newGuests) !== JSON.stringify(extraGuests)) {
+      extraGuests = newGuests;
+      rerender();
+    }
+    firebaseOk = true;
   } catch { firebaseOk = false; }
 }
 
@@ -510,7 +713,19 @@ function toggleArrived(id) {
   else arrived.add(id);
   saveLocal();
   updateUI();
-  fbPut([...arrived].sort((a, b) => a - b));
+  fbPutArrived([...arrived].sort((a, b) => a - b));
+}
+
+function addGuest(first, last) {
+  const id = nextGuestId++;
+  const guest = { id, first, last, starter: null, main: null, dessert: null, img: null, isGuest: true };
+  extraGuests.push(guest);
+  arrived.add(id);
+  saveLocal();
+  fbPutGuests(extraGuests);
+  fbPutArrived([...arrived].sort((a, b) => a - b));
+  rerender();
+  updateUI();
 }
 
 // --- Rendering ---
@@ -525,36 +740,58 @@ function initials(a) {
   return (a.first[0] + a.last[0]).toUpperCase();
 }
 
-function renderCards() {
-  totalCountEl.textContent = ATTENDEES.length;
-  cardList.innerHTML = ATTENDEES.map((a, i) => {
-    const avatarContent = a.img
-      ? `<img src="${IMG_BASE}${a.img}" alt="${a.first} ${a.last}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'avatar-initials\\'>${initials(a)}</div>'">`
-      : `<div class="avatar-initials">${initials(a)}</div>`;
+function allAttendees() {
+  // Reconcile guest IDs from firebase
+  if (extraGuests.length) {
+    const maxId = extraGuests.reduce((m, g) => Math.max(m, g.id || 0), 99);
+    nextGuestId = maxId + 1;
+  }
+  return [...ATTENDEES, ...extraGuests];
+}
 
-    const courses = [
-      a.starter ? `<div class="course"><span class="course-label">S</span> ${a.starter}</div>` : "",
-      a.main    ? `<div class="course"><span class="course-label">M</span> ${a.main}</div>` : "",
-      a.dessert ? `<div class="course"><span class="course-label">D</span> ${a.dessert}</div>` : "",
-    ].join("");
+function renderCard(a, i) {
+  const avatarContent = a.img
+    ? `<img src="${IMG_BASE}${a.img}" alt="${a.first} ${a.last}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'avatar-initials\\'>${initials(a)}</div>'">`
+    : `<div class="avatar-initials">${initials(a)}</div>`;
 
-    return `
-      <div class="card" data-id="${a.id}" style="animation-delay:${i * 30}ms">
-        <div class="avatar-wrap">
-          <div class="avatar-ring">${avatarContent}</div>
-          <div class="arrived-badge">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>
-          </div>
+  const courses = [
+    a.starter ? `<div class="course"><span class="course-label">S</span> ${a.starter}</div>` : "",
+    a.main    ? `<div class="course"><span class="course-label">M</span> ${a.main}</div>` : "",
+    a.dessert ? `<div class="course"><span class="course-label">D</span> ${a.dessert}</div>` : "",
+  ].join("");
+
+  const guestBadge = a.isGuest ? `<span class="guest-badge">Guest</span>` : "";
+  const noCourses = !a.starter && !a.main && !a.dessert;
+  const coursesRow = noCourses && a.isGuest
+    ? `<div class="courses"><div class="course" style="color:var(--text-dim);font-style:italic">No pre-order</div></div>`
+    : `<div class="courses">${courses}</div>`;
+
+  return `
+    <div class="card" data-id="${a.id}" style="animation-delay:${i * 30}ms">
+      <div class="avatar-wrap">
+        <div class="avatar-ring">${avatarContent}</div>
+        <div class="arrived-badge">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>
         </div>
-        <div class="name-row"><div class="name">${a.first} ${a.last}</div></div>
-        <button class="toggle-btn" aria-label="Toggle arrived">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>
-        </button>
-        <div class="courses">${courses}</div>
-      </div>`;
-  }).join("");
+      </div>
+      <div class="name-row"><div class="name">${a.first} ${a.last}</div>${guestBadge}</div>
+      <button class="toggle-btn" aria-label="Toggle arrived">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>
+      </button>
+      ${coursesRow}
+    </div>`;
+}
 
-  // Attach events
+function renderCards() {
+  const all = allAttendees();
+  totalCountEl.textContent = all.length;
+  cardList.innerHTML = all.map((a, i) => renderCard(a, i)).join("") + `
+    <button class="add-guest-btn" id="addGuestBtn">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+      Add unexpected guest
+    </button>`;
+
+  // Attach card events
   cardList.querySelectorAll(".card").forEach(card => {
     card.addEventListener("click", e => {
       if (e.target.closest(".toggle-btn")) return;
@@ -565,25 +802,39 @@ function renderCards() {
       toggleArrived(Number(card.dataset.id));
     });
   });
+
+  // Add guest button
+  document.getElementById("addGuestBtn").addEventListener("click", openModal);
+}
+
+function rerender() {
+  const q = searchInput.value.toLowerCase().trim();
+  renderCards();
+  updateUI();
+  if (q) searchInput.dispatchEvent(new Event("input"));
 }
 
 function updateUI() {
+  const all = allAttendees();
   const cards = cardList.querySelectorAll(".card");
   cards.forEach(card => {
     const id = Number(card.dataset.id);
     card.classList.toggle("arrived", arrived.has(id));
   });
   arrivedCountEl.textContent = arrived.size;
-  progressFill.style.width = `${(arrived.size / ATTENDEES.length) * 100}%`;
+  totalCountEl.textContent = all.length;
+  progressFill.style.width = `${(arrived.size / all.length) * 100}%`;
 }
 
 // --- Search ---
 searchInput.addEventListener("input", () => {
   const q = searchInput.value.toLowerCase().trim();
+  const all = allAttendees();
   let visibleCount = 0;
   cardList.querySelectorAll(".card").forEach(card => {
     const id = Number(card.dataset.id);
-    const a = ATTENDEES[id];
+    const a = all.find(x => x.id === id);
+    if (!a) return;
     const fullName = `${a.first} ${a.last}`.toLowerCase();
     const match = !q || fullName.includes(q);
     card.classList.toggle("hidden", !match);
@@ -592,12 +843,58 @@ searchInput.addEventListener("input", () => {
   emptyState.classList.toggle("visible", visibleCount === 0 && q.length > 0);
 });
 
+// --- Modal ---
+const modal = document.getElementById("modal");
+const guestFirst = document.getElementById("guestFirst");
+const guestLast = document.getElementById("guestLast");
+const modalAdd = document.getElementById("modalAdd");
+const modalCancel = document.getElementById("modalCancel");
+
+function openModal() {
+  guestFirst.value = "";
+  guestLast.value = "";
+  modalAdd.disabled = true;
+  modal.classList.add("open");
+  setTimeout(() => guestFirst.focus(), 300);
+}
+
+function closeModal() {
+  modal.classList.remove("open");
+}
+
+function validateModal() {
+  modalAdd.disabled = !(guestFirst.value.trim() && guestLast.value.trim());
+}
+
+guestFirst.addEventListener("input", validateModal);
+guestLast.addEventListener("input", validateModal);
+modalCancel.addEventListener("click", closeModal);
+modal.addEventListener("click", (e) => { if (e.target === modal) closeModal(); });
+
+modalAdd.addEventListener("click", () => {
+  const first = guestFirst.value.trim();
+  const last = guestLast.value.trim();
+  if (first && last) {
+    addGuest(first, last);
+    closeModal();
+  }
+});
+
+// Enter key in modal fields
+[guestFirst, guestLast].forEach(input => {
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !modalAdd.disabled) {
+      modalAdd.click();
+    }
+  });
+});
+
 // --- Init ---
 loadLocal();
 renderCards();
 updateUI();
 fbListen();
-fbFetch();
+fbFetchAll();
 </script>
 </body>
 </html>
