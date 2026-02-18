@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Speakers Dinner — Rust Nation UK</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg-deep: #131110;
+    --bg-card: #1e1b18;
+    --bg-card-arrived: #1a1e17;
+    --border-subtle: #2e2a26;
+    --border-arrived: #3a4a2a;
+    --accent: #d4a574;
+    --accent-dim: #a07850;
+    --arrived: #8aba6a;
+    --arrived-glow: rgba(138, 186, 106, 0.15);
+    --text: #ede8e0;
+    --text-dim: #8a837a;
+    --text-course: #b8b0a4;
+    --danger: #c47a6a;
+  }
+
+  html { font-size: 16px; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg-deep);
+    color: var(--text);
+    min-height: 100dvh;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  /* Noise texture overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    opacity: 0.03;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 256px;
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* Header */
+  .header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: linear-gradient(to bottom, var(--bg-deep) 60%, transparent);
+    padding: 1.25rem 1.25rem 2rem;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .header-top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 0.2rem;
+  }
+
+  .title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.5rem;
+    font-weight: 400;
+    letter-spacing: -0.01em;
+    color: var(--text);
+  }
+
+  .title em {
+    font-style: italic;
+    color: var(--accent);
+  }
+
+  .counter {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .counter span {
+    color: var(--arrived);
+    font-weight: 600;
+    font-size: 0.9rem;
+  }
+
+  .subtitle {
+    font-family: 'Playfair Display', serif;
+    font-size: 0.85rem;
+    font-style: italic;
+    color: var(--text-dim);
+    margin-bottom: 1rem;
+  }
+
+  /* Search */
+  .search-wrap {
+    position: relative;
+  }
+
+  .search-wrap svg {
+    position: absolute;
+    left: 0.85rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    color: var(--text-dim);
+    pointer-events: none;
+  }
+
+  .search {
+    width: 100%;
+    padding: 0.7rem 0.85rem 0.7rem 2.5rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .search::placeholder { color: var(--text-dim); }
+  .search:focus { border-color: var(--accent-dim); }
+
+  /* Card list */
+  .card-list {
+    padding: 0 1.25rem 6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+  }
+
+  /* Attendee card */
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 14px;
+    padding: 1rem;
+    display: grid;
+    grid-template-columns: 52px 1fr auto;
+    grid-template-rows: auto auto;
+    gap: 0 0.85rem;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    -webkit-tap-highlight-color: transparent;
+    animation: cardIn 0.4s ease both;
+  }
+
+  @keyframes cardIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .card:active {
+    transform: scale(0.985);
+  }
+
+  .card.arrived {
+    background: var(--bg-card-arrived);
+    border-color: var(--border-arrived);
+  }
+
+  .card.arrived .avatar-ring {
+    border-color: var(--arrived);
+    box-shadow: 0 0 12px var(--arrived-glow);
+  }
+
+  .card.arrived .name {
+    color: var(--text-dim);
+  }
+
+  .card.arrived .arrived-badge {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  .card.hidden {
+    display: none;
+  }
+
+  /* Avatar */
+  .avatar-wrap {
+    grid-row: 1 / 3;
+    align-self: center;
+    position: relative;
+  }
+
+  .avatar-ring {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    border: 2px solid var(--border-subtle);
+    overflow: hidden;
+    transition: all 0.3s ease;
+    background: #2a2520;
+  }
+
+  .avatar-ring img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .avatar-initials {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Playfair Display', serif;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--accent);
+    background: linear-gradient(135deg, #2a2520, #1e1b18);
+  }
+
+  .arrived-badge {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 20px;
+    height: 20px;
+    background: var(--arrived);
+    border-radius: 50%;
+    border: 2px solid var(--bg-card-arrived);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transform: scale(0.5);
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .arrived-badge svg {
+    width: 10px;
+    height: 10px;
+    color: #1a1e17;
+  }
+
+  /* Name & info */
+  .name-row {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    align-self: end;
+  }
+
+  .name {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.1rem;
+    font-weight: 400;
+    line-height: 1.2;
+    transition: color 0.25s;
+  }
+
+  .toggle-btn {
+    grid-row: 1 / 3;
+    align-self: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border-subtle);
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    color: var(--text-dim);
+    flex-shrink: 0;
+  }
+
+  .toggle-btn:hover {
+    border-color: var(--accent-dim);
+    color: var(--accent);
+  }
+
+  .card.arrived .toggle-btn {
+    border-color: var(--arrived);
+    background: var(--arrived);
+    color: #1a1e17;
+  }
+
+  .toggle-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  /* Course list */
+  .courses {
+    grid-column: 2;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.6rem;
+    padding-top: 0.3rem;
+    align-self: start;
+  }
+
+  .course {
+    font-size: 0.78rem;
+    color: var(--text-course);
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    line-height: 1.3;
+  }
+
+  .course-label {
+    color: var(--text-dim);
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--text-dim);
+    font-style: italic;
+    font-family: 'Playfair Display', serif;
+    display: none;
+  }
+
+  .empty-state.visible {
+    display: block;
+  }
+
+  /* Progress bar */
+  .progress-track {
+    height: 2px;
+    background: var(--border-subtle);
+    border-radius: 1px;
+    margin-top: 0.75rem;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: var(--arrived);
+    border-radius: 1px;
+    transition: width 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    width: 0%;
+  }
+
+  /* Tablet+ */
+  @media (min-width: 640px) {
+    .header { padding: 1.5rem 2rem 2rem; }
+    .card-list { padding: 0 2rem 6rem; }
+    .title { font-size: 1.75rem; }
+  }
+
+  @media (min-width: 800px) {
+    .card-list {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.65rem;
+    }
+    .empty-state { grid-column: 1 / -1; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-top">
+    <h1 class="title">Speakers <em>Dinner</em></h1>
+    <div class="counter"><span id="arrivedCount">0</span> / <span id="totalCount">0</span> arrived</div>
+  </div>
+  <p class="subtitle">Rust Nation UK 2026</p>
+  <div class="search-wrap">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"/></svg>
+    <input type="text" class="search" id="searchInput" placeholder="Search by name…" autocomplete="off" />
+  </div>
+  <div class="progress-track">
+    <div class="progress-fill" id="progressFill"></div>
+  </div>
+</div>
+
+<div class="card-list" id="cardList"></div>
+<div class="empty-state" id="emptyState">No one matched your search.</div>
+
+<script>
+const ATTENDEES = [
+  { id:0,  first:"Cheuk",       last:"Ting Ho",       starter:"French Onion Soup",     main:"Minute Steak 5oz",                                          dessert:"Pistachio Crème Brûlée",   img:"2026/speakers/cheuk-ting-ho.webp" },
+  { id:1,  first:"David",       last:"Wood",          starter:"French Onion Soup",     main:"Roast Chicken & Frites",                                    dessert:"Grand Chocolate Mousse",    img:"2026/speakers/david-wood.webp" },
+  { id:2,  first:"Ethan",       last:"Brierley",      starter:"Sautéed Scallops",      main:"Bourguignon",                                               dessert:"Tarte au Citron",           img:"2026/speakers/ethan-brierley.webp" },
+  { id:3,  first:"Francesco",   last:"Ciulla",        starter:"King Prawns",           main:"Bourguignon (possibly with fries)",                          dessert:"Warm Chocolate Fondant",    img:"2026/speakers/francesco-ciulla.webp" },
+  { id:4,  first:"Jon",         last:"Seager",        starter:"Twice-Baked Soufflé",   main:"Steak & Frites (Sirloin, rare) + Peppercorn sauce",          dessert:"Pistachio Crème Brûlée",   img:"2026/speakers/jon-seager.webp" },
+  { id:5,  first:"Joshua",      last:"Mo",            starter:"King Prawns",           main:"Grilled Sea Bream",                                         dessert:"Chocolate Praline Tart",    img:"2026/speakers/joshua-mo.webp" },
+  { id:6,  first:"Jonas",       last:"Hahn",          starter:null,                    main:"Half Roasted Chicken",                                      dessert:null,                        img:"2026/speakers/jonas-hahn.png" },
+  { id:7,  first:"Lawrence",    last:"Freeman",       starter:"Twice-Baked Soufflé",   main:"Rib-eye Steak (medium) with Béarnaise sauce & Green Salad",  dessert:"Warm Chocolate Fondant",    img:"2026/speakers/lawrence-freeman.webp" },
+  { id:8,  first:"Ludovico",    last:"Rossi",         starter:"King Prawns",           main:"Roast Chicken & Frites",                                    dessert:"Chocolate Praline Tart",    img:"2026/speakers/ludovico-rossi.webp" },
+  { id:9,  first:"Lisa",        last:"Crossman",      starter:"Twice-Baked Soufflé",   main:"Pan-Fried Salmon",                                          dessert:"Café Gourmand",             img:"2026/speakers/lisa-crossman.webp" },
+  { id:10, first:"Lyle",        last:"Dean",          starter:"French Onion Soup",     main:"Minute Steak 5oz (+ side of fries)",                         dessert:"Chocolate Praline Tart",    img:"2026/speakers/lyle-dean.webp" },
+  { id:11, first:"Miguel",      last:"Correa",        starter:"Calamari",              main:"Filet Steak",                                               dessert:"Pistachio Crème Brûlée",   img:null },
+  { id:12, first:"Orhun",       last:"Parmaksız",     starter:"Potted Crab",           main:"Rib-eye Steak",                                             dessert:null,                        img:"2026/speakers/orhun-parmaks%C4%B1z.webp" },
+  { id:13, first:"Pete",        last:"LeVasseur",     starter:null,                    main:"Half Roast Chicken & Frites",                               dessert:null,                        img:"2026/speakers/pete-levasseur.webp" },
+  { id:14, first:"Stuart",      last:"Harris",        starter:"Sautéed Scallops",      main:"Rib-eye Steak",                                             dessert:null,                        img:"2023/speakers/stuart-harris.png" },
+  { id:15, first:"Stephan",     last:"Eckes",         starter:null,                    main:"Vegan Fable Burger",                                        dessert:null,                        img:"2026/speakers/stephan-eckes.webp" },
+  { id:16, first:"Vitaly",      last:"Bragilevsky",   starter:"French Onion Soup",     main:"Pan-Fried Salmon",                                          dessert:"Tarte au Citron",           img:"2026/speakers/vitaly.webp" },
+  { id:17, first:"Zhouxuan",    last:"Tang",          starter:"King Prawns",           main:"Côte Burger",                                               dessert:"Ice Cream Duo",             img:"2026/speakers/zhouxuan-tang.webp" },
+  { id:18, first:"Zeeshan Ali", last:"Khan",          starter:"King Prawns",           main:"Roast Chicken",                                             dessert:"Grand Chocolate Mousse",    img:"2026/speakers/zeeshan-ali-khan.webp" },
+  { id:19, first:"Jonas",       last:"Kruckenberg",   starter:null,                    main:"Pistou Gnocchi",                                            dessert:"Warm Chocolate Fondant",    img:null },
+  { id:20, first:"Georg",       last:"Semmler",       starter:"Warm Beetroot Salad",   main:"Côte Burger",                                               dessert:"Chocolate Praline Tart",    img:"2026/speakers/georg-semmler.webp" },
+  { id:21, first:"Herbert",     last:"Wolverson",     starter:null,                    main:"Lamb Mafalde",                                              dessert:null,                        img:"2026/speakers/herbert-wolverson.webp" },
+  { id:22, first:"Sam",         last:"Bell",          starter:"Potted Crab",           main:"Roast Chicken (make sure there is gravy)",                   dessert:null,                        img:null },
+  { id:23, first:"Matt",        last:"Cahill",        starter:"King Prawns",           main:"Rib-eye Steak",                                             dessert:null,                        img:null },
+  { id:24, first:"Ernest",      last:"Kissiedu",      starter:"King Prawns",           main:"Bourguignon",                                               dessert:"Pistachio Crème Brûlée",   img:null },
+];
+
+const IMG_BASE = "https://www.rustnationuk.com/assets/images/";
+const STORAGE_KEY = "rustdinner_arrived";
+const HASH_PREFIX = "a=";
+
+// --- State ---
+let arrived = new Set();
+
+function loadState() {
+  const hash = location.hash.slice(1);
+  if (hash.startsWith(HASH_PREFIX)) {
+    const ids = hash.slice(HASH_PREFIX.length).split(",").map(Number).filter(n => !isNaN(n));
+    arrived = new Set(ids);
+    saveToStorage();
+  } else {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) arrived = new Set(JSON.parse(stored));
+    } catch {}
+  }
+}
+
+function saveToStorage() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify([...arrived])); } catch {}
+}
+
+function syncHash() {
+  const ids = [...arrived].sort((a, b) => a - b).join(",");
+  history.replaceState(null, "", arrived.size ? `#${HASH_PREFIX}${ids}` : location.pathname);
+}
+
+function toggleArrived(id) {
+  if (arrived.has(id)) arrived.delete(id);
+  else arrived.add(id);
+  saveToStorage();
+  syncHash();
+  updateUI();
+}
+
+// --- Rendering ---
+const cardList = document.getElementById("cardList");
+const emptyState = document.getElementById("emptyState");
+const arrivedCountEl = document.getElementById("arrivedCount");
+const totalCountEl = document.getElementById("totalCount");
+const progressFill = document.getElementById("progressFill");
+const searchInput = document.getElementById("searchInput");
+
+function initials(a) {
+  return (a.first[0] + a.last[0]).toUpperCase();
+}
+
+function renderCards() {
+  totalCountEl.textContent = ATTENDEES.length;
+  cardList.innerHTML = ATTENDEES.map((a, i) => {
+    const avatarContent = a.img
+      ? `<img src="${IMG_BASE}${a.img}" alt="${a.first} ${a.last}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'avatar-initials\\'>${initials(a)}</div>'">`
+      : `<div class="avatar-initials">${initials(a)}</div>`;
+
+    const courses = [
+      a.starter ? `<div class="course"><span class="course-label">S</span> ${a.starter}</div>` : "",
+      a.main    ? `<div class="course"><span class="course-label">M</span> ${a.main}</div>` : "",
+      a.dessert ? `<div class="course"><span class="course-label">D</span> ${a.dessert}</div>` : "",
+    ].join("");
+
+    return `
+      <div class="card" data-id="${a.id}" style="animation-delay:${i * 30}ms">
+        <div class="avatar-wrap">
+          <div class="avatar-ring">${avatarContent}</div>
+          <div class="arrived-badge">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>
+          </div>
+        </div>
+        <div class="name-row"><div class="name">${a.first} ${a.last}</div></div>
+        <button class="toggle-btn" aria-label="Toggle arrived">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>
+        </button>
+        <div class="courses">${courses}</div>
+      </div>`;
+  }).join("");
+
+  // Attach events
+  cardList.querySelectorAll(".card").forEach(card => {
+    card.addEventListener("click", e => {
+      if (e.target.closest(".toggle-btn")) return;
+      toggleArrived(Number(card.dataset.id));
+    });
+    card.querySelector(".toggle-btn").addEventListener("click", e => {
+      e.stopPropagation();
+      toggleArrived(Number(card.dataset.id));
+    });
+  });
+}
+
+function updateUI() {
+  const cards = cardList.querySelectorAll(".card");
+  cards.forEach(card => {
+    const id = Number(card.dataset.id);
+    card.classList.toggle("arrived", arrived.has(id));
+  });
+  arrivedCountEl.textContent = arrived.size;
+  progressFill.style.width = `${(arrived.size / ATTENDEES.length) * 100}%`;
+}
+
+// --- Search ---
+searchInput.addEventListener("input", () => {
+  const q = searchInput.value.toLowerCase().trim();
+  let visibleCount = 0;
+  cardList.querySelectorAll(".card").forEach(card => {
+    const id = Number(card.dataset.id);
+    const a = ATTENDEES[id];
+    const fullName = `${a.first} ${a.last}`.toLowerCase();
+    const match = !q || fullName.includes(q);
+    card.classList.toggle("hidden", !match);
+    if (match) visibleCount++;
+  });
+  emptyState.classList.toggle("visible", visibleCount === 0 && q.length > 0);
+});
+
+// --- Init ---
+loadState();
+renderCards();
+updateUI();
+</script>
+</body>
+</html>
