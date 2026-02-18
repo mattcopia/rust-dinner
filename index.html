@@ -427,40 +427,90 @@ const ATTENDEES = [
 
 const IMG_BASE = "https://www.rustnationuk.com/assets/images/";
 const STORAGE_KEY = "rustdinner_arrived";
-const HASH_PREFIX = "a=";
+
+// ── Firebase config ──
+// Replace with your Firebase Realtime Database URL (create one at https://console.firebase.google.com)
+const FB_DB = "https://rust-dinner-default-rtdb.firebaseio.com";
+const FB_PATH = "/arrived";
+const FB_URL = `${FB_DB}${FB_PATH}`;
 
 // --- State ---
 let arrived = new Set();
+let firebaseOk = false;
 
-function loadState() {
-  const hash = location.hash.slice(1);
-  if (hash.startsWith(HASH_PREFIX)) {
-    const ids = hash.slice(HASH_PREFIX.length).split(",").map(Number).filter(n => !isNaN(n));
-    arrived = new Set(ids);
-    saveToStorage();
-  } else {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) arrived = new Set(JSON.parse(stored));
-    } catch {}
-  }
+// Load from localStorage as immediate fallback
+function loadLocal() {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) arrived = new Set(JSON.parse(stored));
+  } catch {}
 }
 
-function saveToStorage() {
+function saveLocal() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify([...arrived])); } catch {}
 }
 
-function syncHash() {
-  const ids = [...arrived].sort((a, b) => a - b).join(",");
-  history.replaceState(null, "", arrived.size ? `#${HASH_PREFIX}${ids}` : location.pathname);
+// --- Firebase REST API ---
+async function fbPut(data) {
+  try {
+    await fetch(`${FB_URL}.json`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    firebaseOk = true;
+  } catch { firebaseOk = false; }
+}
+
+function fbListen() {
+  try {
+    const evtSource = new EventSource(`${FB_URL}.json`);
+    evtSource.addEventListener("put", (e) => {
+      try {
+        const payload = JSON.parse(e.data);
+        const data = payload.data;
+        if (data === null) {
+          arrived = new Set();
+        } else if (Array.isArray(data)) {
+          arrived = new Set(data);
+        } else if (typeof data === "object") {
+          // Firebase may return {0: id0, 1: id1, ...}
+          arrived = new Set(Object.values(data));
+        }
+        firebaseOk = true;
+        saveLocal();
+        updateUI();
+      } catch {}
+    });
+    evtSource.addEventListener("patch", (e) => {
+      // Re-fetch on patch for simplicity
+      fbFetch();
+    });
+    evtSource.onerror = () => { firebaseOk = false; };
+  } catch { firebaseOk = false; }
+}
+
+async function fbFetch() {
+  try {
+    const res = await fetch(`${FB_URL}.json`);
+    const data = await res.json();
+    if (Array.isArray(data)) {
+      arrived = new Set(data);
+    } else if (data && typeof data === "object") {
+      arrived = new Set(Object.values(data));
+    }
+    firebaseOk = true;
+    saveLocal();
+    updateUI();
+  } catch { firebaseOk = false; }
 }
 
 function toggleArrived(id) {
   if (arrived.has(id)) arrived.delete(id);
   else arrived.add(id);
-  saveToStorage();
-  syncHash();
+  saveLocal();
   updateUI();
+  fbPut([...arrived].sort((a, b) => a - b));
 }
 
 // --- Rendering ---
@@ -543,9 +593,11 @@ searchInput.addEventListener("input", () => {
 });
 
 // --- Init ---
-loadState();
+loadLocal();
 renderCards();
 updateUI();
+fbListen();
+fbFetch();
 </script>
 </body>
 </html>
